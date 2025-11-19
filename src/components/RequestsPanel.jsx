@@ -1,43 +1,86 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react'
 
-export default function RequestsPanel() {
-  const backend = import.meta.env.VITE_BACKEND_URL || "";
-  const [items, setItems] = useState([]);
+export default function RequestsPanel({ backendUrl }) {
+  const [teamId, setTeamId] = useState('')
+  const [items, setItems] = useState([])
+  const [status, setStatus] = useState('')
 
-  const refresh = async () => {
-    const res = await fetch(`${backend}/match-requests`);
-    if (res.ok) setItems(await res.json());
-  };
+  const load = async () => {
+    if (!teamId) {
+      setStatus('Enter your team ID to view requests.')
+      return
+    }
+    setStatus('Loading...')
+    try {
+      const res = await fetch(`${backendUrl}/match-requests?team_id=${teamId}`)
+      const data = await res.json()
+      setItems(data)
+      setStatus(`Loaded ${data.length} requests`)
+    } catch (e) {
+      console.error(e)
+      setStatus('Failed to load requests')
+    }
+  }
 
-  useEffect(() => { refresh(); }, []);
-
-  const act = async (id, action) => {
-    const res = await fetch(`${backend}/match-requests/${id}/${action}`, { method: "POST" });
-    if (res.ok) refresh();
-  };
+  useEffect(() => {
+    // load()
+  }, [])
 
   return (
-    <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-white font-semibold">Match Requests</h3>
-        <button onClick={refresh} className="text-sm text-blue-300">Refresh</button>
+    <div className="space-y-4">
+      <div className="flex gap-3 items-end">
+        <div className="flex-1">
+          <label className="block text-sm font-medium">Your Team ID</label>
+          <input value={teamId} onChange={e=>setTeamId(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2" placeholder="Paste your team ID" />
+        </div>
+        <button onClick={load} className="inline-flex items-center px-4 py-2 rounded-md bg-black text-white">Refresh</button>
       </div>
-      <div className="grid gap-2">
-        {items.map(r => (
-          <div key={r.id} className="bg-slate-900/60 text-white rounded p-3 flex items-center justify-between">
-            <div>
-              <div className="font-medium">{r.from_team_id} → {r.to_team_id}</div>
-              <div className="text-xs text-slate-300">{r.status}</div>
+
+      <ul className="divide-y rounded-md border bg-white">
+        {items.map(it => (
+          <li key={it.id} className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Request from {it.from_team_id} → {it.to_team_id}</div>
+                <div className="text-sm text-gray-500">Status: {it.status}</div>
+              </div>
+              <div className="flex gap-2">
+                <ActionButton backendUrl={backendUrl} id={it.id} action="accept" label="Accept" />
+                <ActionButton backendUrl={backendUrl} id={it.id} action="reject" label="Reject" variant="secondary" />
+                <ActionButton backendUrl={backendUrl} id={it.id} action="confirm" label="Confirm" variant="primary" />
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button onClick={()=>act(r.id,"accept")} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded">Accept</button>
-              <button onClick={()=>act(r.id,"reject")} className="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded">Reject</button>
-              <button onClick={()=>act(r.id,"confirm")} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded">Confirm</button>
-            </div>
-          </div>
+          </li>
         ))}
-        {items.length===0 && <div className="text-slate-300 text-sm">No requests yet</div>}
-      </div>
+        {items.length === 0 && (
+          <li className="p-6 text-center text-sm text-gray-500">No requests yet.</li>
+        )}
+      </ul>
     </div>
-  );
+  )
+}
+
+function ActionButton({ backendUrl, id, action, label, variant='default' }) {
+  const [status, setStatus] = useState('')
+  const onClick = async () => {
+    setStatus('...')
+    try {
+      const res = await fetch(`${backendUrl}/match-requests/${id}/${action}`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      setStatus('Done')
+    } catch (e) {
+      console.error(e)
+      setStatus('Error')
+    }
+  }
+  const styles = {
+    default: 'bg-indigo-600 text-white',
+    secondary: 'bg-gray-200 text-gray-900',
+    primary: 'bg-green-600 text-white'
+  }
+  return (
+    <button onClick={onClick} className={`inline-flex items-center px-3 py-2 rounded-md ${styles[variant]}`}>
+      {label} {status && <span className="ml-1 text-xs opacity-70">{status}</span>}
+    </button>
+  )
 }
